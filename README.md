@@ -1,5 +1,35 @@
 
-##### Import libraries
+### Use case
+[Tokenization](https://nlp.stanford.edu/IR-book/html/htmledition/tokenization-1.html) is an important pre-step for any Natural Language Processing (NLP) task. Any fancy model you might plan to use relies on a tokenized text corpus. Consider a demo sentence
+
+```New York Stock Exchange is a busy place. ```
+
+Here, on typical tokenization we get an ordered list :
+
+```[ "new",
+	"york",
+	"stock",
+	"exchange",
+	"busy",
+	"place" ] ```
+  
+Such tokenization ignores the fact that "New York" is one entitiy rather than 2 seperate entities "new" and "york". Visualize this above case  in a ```word2vev``` space. By this intuition itself, one can conclude that such tokenization should have a huge effect on further processing.
+
+### Problem definition 
+Generate a model that can learn phrases (multi-word entities) given unlabelled corpus.
+
+### Solution
+
+The solution for this task was implemented based on [this talk](https://vimeo.com/72168762#t=1985s) timestamped by [Shailesh Kumar](https://www.linkedin.com/in/shaileshk/). 
+
+
+<iframe src="https://player.vimeo.com/video/72168762?color=ffffff" width="640" height="360" frameborder="0" webkitallowfullscreen mozallowfullscreen allowfullscreen> </iframe>
+
+
+Okay now let us have a look at the implementation.
+
+
+- Import libraries
 
 
 ```python
@@ -12,25 +42,30 @@ from tqdm import tqdm
 from scipy import sparse
 from sklearn.feature_extraction.text import CountVectorizer
 ```
-
+Along with system packages, I have used numpy, tqdm, scipy and scikit-learn. ```tqdm``` is used for obtaining a progress bar on loops. I find it very useful during development and also underrated.
 
 ```python
 NUM_PROCESSES = multiprocessing.cpu_count() - 1
 ```
 
-###### Read already downloaded data. (Find links to corpus below)
+- **Read data**
 
+Dataset used for this demonstration can be obtained here :
+>+ http://www.statmt.org/wmt11/training-monolingual-news-2011.tgz
+>+ http://www.statmt.org/wmt11/training-monolingual-news-2010.tgz
+
+You can use ```wget <>``` command to pull it to your system and then untar it using ```tar -xvzf <>```
 
 ```python
-# http://www.statmt.org/wmt11/training-monolingual-news-2011.tgz
-# http://www.statmt.org/wmt11/training-monolingual-news-2010.tgz
 corpus1 = open("data/training-monolingual/news.2011.en.shuffled","r").read()
 corpus2 = open("data/training-monolingual/news.2010.en.shuffled","r").read()
 corpus = corpus1 + "\n" + corpus2
 ```
 
-###### Preprocess
+- **Preprocessing**
 
+
+Doing simple pre-processing and tokenizing
 
 ```python
 sentences = corpus.split("\n")
@@ -42,8 +77,9 @@ print("Total sentences : {}".format(len(sentences)))
 
     Total sentences : 20142184
 
+- **CRUZ**
 
-###### Train CountVectorizer and generate dictionary (and also see how to generate a reverse one)
+First we train a CountVectorizer and generate dictionary (and also see how to generate a reverse one)
 
 
 ```python
@@ -59,35 +95,33 @@ print("Length of dictionary : {}".format(len(vectorizer.vocabulary_)))
     Length of dictionary : 1050336
 
 
-
 ```python
 word2index = vectorizer.vocabulary_
 index2word = dict(zip(word2index.values(),word2index.keys()))
 ```
 
-###### Generate a co-occurance matriz
+- (Unnecessary) Generate a [co-occurrence matrix](https://stackoverflow.com/a/24076711)
 
 
 ```python
 # unordered_co_mat = (sentences_mat.T * sentences_mat) 
 # unordered_co_mat.setdiag(0) 
-# print("Shape of co-occurance matrix (unordered) - {}".format(unordered_co_mat.shape))
+# print("Shape of co-occurrence matrix (unordered) - {}".format(unordered_co_mat.shape))
 # list(word2index.keys())[0:1000]
 ```
 
-##### Function that generates position aware co-occurance matrix
-
+Now let us write a function that generates position aware co-occurrence matrix
 
 ```python
 def create_dist_map(dist):
-    """ Creates co-occurance matrix of size(vocab_len, vocal_len) between all elements
+    """ Creates co-occurrence matrix of size(vocab_len, vocab_len) between all elements
         at given distance "dist" in corpus
     """
     # initialize matrix to zeros
     dist_mat = sparse.lil_matrix((len(word2index),len(word2index)),dtype=np.int32)
     
     # train on random fixed length subset of corpus
-#     for sentence in tqdm(random.sample(sentences,100000)):
+	# for sentence in tqdm(random.sample(sentences,100000)):
     # OR
     # train on all corpus
     for sentence in tqdm(sentences):
@@ -104,9 +138,10 @@ def create_dist_map(dist):
         pass
     return(dist_mat)
 ```
+The parameter ```dist``` is the distance at which a particular set of tokens co-occur. The resultant matrix is of shape ```(vocab_len, vocab_len)```. Any value in this matrix is the number of co-occurrences of words at index row and index column at the given distance ```dist```.
 
-###### Single process method
 
+- Single process method
 
 ```python
 # co_oc1 = create_dist_map(1)
@@ -116,7 +151,7 @@ def create_dist_map(dist):
 # co_oc5 = create_dist_map(5)
 ```
 
-###### Multi-processing method
+- Multi-processing method
 
 
 ```python
@@ -132,8 +167,10 @@ pool.join()
     100%|██████████| 20142184/20142184 [1:48:25<00:00, 3096.03it/s]
     100%|██████████| 20142184/20142184 [1:51:41<00:00, 3005.82it/s]
 
+We will generate such matrices for value of ```dist``` parameter varying from 1 to 5. This means we will be able to detect phrases with length upto 6 words.
 
-###### Save matrices
+
+- Save learnt co-occurrence matrices
 
 
 ```python
@@ -144,13 +181,7 @@ sparse.save_npz("co_oc_matrices/co_oc_4",co_oc4.tocoo())
 sparse.save_npz("co_oc_matrices/co_oc_5",co_oc5.tocoo())
 ```
 
-###### Load previously saved matrices
-- to compare is saved and loaded matrices are the same do 
-
- ``` (saved_sparse_mat != loaded_sparse_matrix)``` 
- 
- and check for elements present in the newly generated sparse matrix
-
+- Load previously saved matrices
 
 ```python
 # co_oc1 = sparse.load_npz("co_oc_matrices/co_oc1.npz")
@@ -159,8 +190,14 @@ sparse.save_npz("co_oc_matrices/co_oc_5",co_oc5.tocoo())
 # co_oc4 = sparse.load_npz("co_oc_matrices/co_oc4.npz")
 # co_oc5 = sparse.load_npz("co_oc_matrices/co_oc5.npz")
 ```
+To compare saved and loaded matrices do  ``` (saved_sparse_mat != loaded_sparse_matrix)``` .
 
-###### Find compund tokens in any given sentence
+
+### Inferencing model
+
+
+Custom function to detect vertices whose values (number of co-occurrences of leaf nodes) are local maximas. This function prints a tree like structure as shown 
+[here](https://vimeo.com/72168762#t=2325s) (TIMESTAMPED)
 
 
 ```python
@@ -259,7 +296,7 @@ def inference(test):
                 
         
 ```
-
+- Testing results
 
 ```python
 s = "new york stock exchange is a busy place "
@@ -309,3 +346,18 @@ inference(s)
     Suggestions : 
     	south africa - 16986
     	is one - 36105
+
+### Conclusion
+
+From the above example, viz. "new york", "stock exchange", "new york stock exchange", "south africa", etc., we can conclude that this type of tokenization is capable of learning semantically accurate phrase token. There are many false positives like "is a", "is one" etc. but such cases can be filtered out by using stop-words analysis in post processing.
+
+USAGE INSTRUCTIONS:
+
+>If you find this method interesting for your use-case :
+>1. Generate co-occurrence matrices over your training corpus.
+>2. Generate a new dictionary by inferencing training corpus.
+>3. Now tokenize using new dictionary.
+
+Hope you've found this implementation useful in understanding the underlying technique. Let me know your thoughts in the comments below.
+
+{% include disqus_comments.html %}
