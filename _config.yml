@@ -1,1 +1,7 @@
 theme: jekyll-theme-minimal
+author: Abhishek Shirgokar
+author_email: abhishek.shirgaokar@gmail.com
+comments: True
+title: Unsupervised Syntactic Tokenisation 
+description: A completely unsupervised way for learning domain-specific multi word entities.
+show_downloads: true
