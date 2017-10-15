@@ -3,5 +3,5 @@ author: Abhishek Shirgokar
 author_email: abhishek.shirgaokar@gmail.com
 comments: True
 title: Unsupervised Syntactic Tokenisation 
-description: A completely unsupervised way for learning domain-specific multi word entities.
+description: A completely unsupervised way for learning domain-specific phrase entities.
 show_downloads: true
